@@ -35,7 +35,7 @@ export function readInvoices(csvText, columns) {
     const paid = get("paid") ? cents(get("paid")) : 0;
     const why = [
       !number && "no invoice number",
-      (!email.ok || !email.value) && `email "${get("email")}" can't be used`,
+      !get("email").trim() ? "it has no email" : !email.ok && `email "${get("email")}" can't be used`,
       (!due.ok || !due.value) && `due date "${get("due")}" can't be read`,
       Number.isNaN(total) && `total "${get("total")}" isn't an amount`,
       Number.isNaN(paid) && `paid "${get("paid")}" isn't an amount`,
@@ -73,7 +73,7 @@ export async function remind({ invoices, problems = [], store, mail, business, n
       if (result === "sent") done.reminded++;
     }
     if (late >= cfg.ownerAfter) {
-      const result = await mail.once(`invoice:${inv.number}:owner`, { to: business.owner, subject: `Invoice ${inv.number} is ${late} days late`, text: `${inv.customer || inv.email} owes ${dollars(balance)} (due ${inv.due}). The automatic reminders are done; this one needs a personal call or a pause on work. No more automatic emails will be sent for it.` });
+      const result = await mail.once(`invoice:${inv.number}:owner`, { to: business.owner, subject: `Invoice ${inv.number} is ${late} days late`, text: `${inv.customer || inv.email} owes ${dollars(balance)} (due ${longDate(inv.due)}). The automatic reminders are done; this one needs a personal call or a pause on work. No more automatic emails will be sent for it.` });
       if (result === "sent") done.owner++;
     }
   }
