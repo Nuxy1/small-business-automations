@@ -1,11 +1,12 @@
 # Small-business automations
 
-Three working automations for made-up local businesses: lead follow-up for a plumber, invoice reminders for a cleaning company and review requests for a salon. Each one cleans messy real-world data, never sends the same message twice, never fails silently, and keeps quiet at night. Zero dependencies, Node 20+.
+Four working automations for made-up local businesses: booking reminders for a dog groomer, lead follow-up for a plumber, invoice reminders for a cleaning company and review requests for a salon. Each one cleans messy real-world data, never sends the same message twice, never fails silently, and keeps quiet at night. Zero dependencies, Node 20+.
 
 The businesses are invented for the demo: every address ends in `.example` and every phone number is a 555 number, so nothing here can reach a real person.
 
 | Automation | For | What it does |
 |---|---|---|
+| [Booking reminders](booking-reminders/index.js) | Prairie Paws Grooming | A confirmation the moment someone books online, with a link to move or cancel; a reminder the day before and 2 hours before, never at night. A moved booking gets new reminders, a cancelled one none, and the owner gets the day's schedule each morning. |
 | [Lead follow-up](lead-follow-up/index.js) | Northfield Plumbing Co. | Every website inquiry gets an instant reply and the owner an alert with the phone number; two friendly follow-ups (after 1 and 3 days) unless the customer replies first. The same person sending the form twice is one conversation. |
 | [Invoice reminders](invoice-reminders/index.js) | Cannon River Cleaning | Reads the open-invoices export (QuickBooks, Wave, Square or a sheet) and sends reminders 3, 7 and 14 days after the due date, with partial payments shown. At 30 days the owner is told to step in. A list every Monday. |
 | [Review requests](review-requests/index.js) | Juniper & Rose Salon | A thank-you with the Google review link a couple of hours after each visit; never after a no-show or cancellation, never twice in 180 days, never to anyone who said stop. |
@@ -13,12 +14,12 @@ The businesses are invented for the demo: every address ends in `.example` and e
 ## Try it
 
 ```
-npm test        # 10 tests, messy data included
-npm run demo    # a simulated week of all three; every email lands in demo/outbox/
+npm test        # 12 tests, messy data included
+npm run demo    # a simulated week of all four; every email lands in demo/outbox/
 npm run bench   # 5,000 messy records through each one, timed
 ```
 
-On my PC (a Ryzen 7 desktop), `npm run bench` gives: 5,000 form submissions with repeats, typos and bad emails in 0.14 s, with no customer emailed twice; a 5,000-row invoice export read and checked in 0.18 s; 5,000 salon visits in 0.08 s. A small business's whole year fits in well under a second.
+On my PC (a Ryzen 7 desktop), `npm run bench` gives: 5,000 form submissions with repeats, typos and bad emails in 0.14 s, with no customer emailed twice; a 5,000-row invoice export read and checked in 0.18 s; 5,000 salon visits in 0.08 s; and 5,000 bookings confirmed and checked for reminders in 1.4 s. A small business's whole year fits in well under a second.
 
 The demo prints the week as it happens:
 
