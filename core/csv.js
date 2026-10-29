@@ -78,10 +78,3 @@ export function toRecords(rows, need = []) {
     return record;
   });
 }
-
-export function stringifyCsv(rows) {
-  return rows.map((row) => row.map((value) => {
-    const text = String(value ?? "");
-    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  }).join(",")).join("\r\n") + "\r\n";
-}
