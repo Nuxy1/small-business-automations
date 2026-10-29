@@ -22,7 +22,8 @@ createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/health") return reply(200, "ok");
     if (req.method !== "POST" || req.url !== "/lead") return reply(404, "not found");
     const given = Buffer.from(String(req.headers["x-secret"] ?? ""));
-    if (given.length !== SECRET.length || !timingSafeEqual(given, Buffer.from(SECRET))) return reply(401, "wrong secret");
+    const want = Buffer.from(SECRET); // (bytes, not characters: timingSafeEqual throws on a length mismatch)
+    if (given.length !== want.length || !timingSafeEqual(given, want)) return reply(401, "wrong secret");
     let body = "";
     for await (const chunk of req) if ((body += chunk).length > 100_000) return reply(413, "too large");
     const form = /json/.test(req.headers["content-type"] ?? "") ? JSON.parse(body) : Object.fromEntries(new URLSearchParams(body));
