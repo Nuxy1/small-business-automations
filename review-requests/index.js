@@ -4,7 +4,7 @@
 // out is never asked again. Every customer gets the same public link: asking only the happy ones ("review gating")
 // is against Google's rules, so it isn't done.
 import * as normalize from "../core/normalize.js";
-import { DAY, HOUR, outsideQuiet } from "../core/time.js";
+import { DAY, HOUR, outsideQuiet, parseTime } from "../core/time.js";
 
 export const DEFAULTS = { timeZone: "America/Chicago", delayHours: 2, quiet: [20, 9], askEveryDays: 180, skip: /cancel|no.?show|refund/i };
 
@@ -18,9 +18,10 @@ export function reviewRequests({ store, mail, business, ...options }) {
     async run(visits, now = new Date()) {
       const out = { sent: 0, waiting: 0, skipped: [] };
       const night = outsideQuiet(now, cfg.timeZone, cfg.quiet) > now; // (overdue ones wait for the morning too)
-      for (const visit of visits) {
+      for (const v of Array.isArray(visits) ? visits : []) {
+        const visit = v && typeof v === "object" ? v : {};
         const email = normalize.email(visit.email);
-        const finished = new Date(visit.finished);
+        const finished = parseTime(visit.finished, cfg.timeZone);
         const why = !visit.id ? "no visit id"
           : !email.ok || !email.value ? "no usable email"
           : Number.isNaN(finished.getTime()) ? "unreadable finish time"
