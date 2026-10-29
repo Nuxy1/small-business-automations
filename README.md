@@ -14,7 +14,7 @@ The businesses are invented for the demo: every address ends in `.example` and e
 ## Try it
 
 ```
-npm test        # 12 tests, messy data included
+npm test        # 16 tests, messy data included
 npm run demo    # a simulated week of all four; every email lands in demo/outbox/
 npm run bench   # 5,000 messy records through each one, timed
 ```
