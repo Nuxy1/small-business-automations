@@ -2,7 +2,7 @@
 // friendly reminder 3, 7 and 14 days after an invoice is due, never the same one twice, stopping once it's paid. At 30
 // days late the owner is told to step in (a person, not a fourth email). Every Monday morning the owner gets the list.
 // Rows that can't be trusted (no email, unreadable date or amount) are never guessed at: they go to the owner.
-import { parseCsv, toRecords } from "../core/csv.js";
+import { decode, key, parseCsv, toRecords } from "../core/csv.js";
 import * as normalize from "../core/normalize.js";
 import { daysBetween, local } from "../core/time.js";
 
@@ -21,14 +21,22 @@ export function cents(raw) {
 export const longDate = (date) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 export const dollars =(c) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// The export, read with `columns` naming which column holds what. Returns { invoices, problems }.
-export function readInvoices(csvText, columns) {
-  const invoices = [];
+// The export (its text, or the file's bytes), read with `columns` naming which column holds what. Returns { invoices,
+// problems }. A file that can't be read at all (an unclosed quote, the wrong report) is one problem with file: true.
+export function readInvoices(input, columns) {
+  const found = [];
   const problems = [];
-  for (const row of toRecords(parseCsv(csvText))) {
+  let rows;
+  try {
+    rows = toRecords(parseCsv(typeof input === "string" ? input : decode(input)), [columns.number, columns.email, columns.due, columns.total]);
+  } catch (error) {
+    return { invoices: [], problems: [{ file: true, line: 0, number: "", why: [error.message] }] };
+  }
+  for (const row of rows) {
     if (Object.values(row).every((v) => typeof v !== "string" || !v)) continue;
-    const get = (field) => row[columns[field]] ?? "";
+    const get = (field) => row[key(columns[field])] ?? "";
     const number = get("number").trim();
+    if (!number && Object.values(row).some((v) => typeof v === "string" && /^(sub|grand )?total\b/i.test(v))) continue; // (the export's total line)
     const email = normalize.email(get("email"));
     const due = normalize.date(get("due"));
     const total = cents(get("total"));
@@ -41,9 +49,13 @@ export function readInvoices(csvText, columns) {
       Number.isNaN(paid) && `paid "${get("paid")}" isn't an amount`,
     ].filter(Boolean);
     if (why.length) problems.push({ line: row.__line, number, why });
-    else invoices.push({ number, customer: normalize.name(get("customer")).value, email: email.value, due: due.value, total, paid, link: get("link").trim() });
+    else found.push({ line: row.__line, invoice: { number, customer: normalize.name(get("customer")).value, email: email.value, due: due.value, total, paid, link: get("link").trim() } });
   }
-  return { invoices, problems };
+  // (two rows with one invoice number would share its reminders: neither is guessed at, both go to the owner)
+  const count = new Map();
+  for (const { invoice } of found) count.set(invoice.number, (count.get(invoice.number) ?? 0) + 1);
+  for (const { line, invoice } of found) if (count.get(invoice.number) > 1) problems.push({ line, number: invoice.number, why: [`invoice number ${invoice.number} is on ${count.get(invoice.number)} rows`] });
+  return { invoices: found.filter(({ invoice }) => count.get(invoice.number) === 1).map(({ invoice }) => invoice), problems };
 }
 
 export async function remind({ invoices, problems = [], store, mail, business, now = new Date(), ...options }) {
@@ -55,7 +67,9 @@ export async function remind({ invoices, problems = [], store, mail, business, n
   const sendable = today.weekday <= 5 && today.hour >= cfg.sendFrom && today.hour < cfg.sendTo;
 
   for (const p of problems) {
-    await mail.once(`invoice-problem:${p.number || `line-${p.line}`}:${p.why.join("|")}`, { to: business.owner, subject: `Invoice ${p.number || `on line ${p.line}`} needs a look`, text: `It wasn't reminded because: ${p.why.join("; ")}.\nFix it in your invoicing tool and it will be picked up on the next run.` });
+    await mail.once(`invoice-problem:${p.file ? "file" : p.number || `line-${p.line}`}:${p.why.join("|")}`, p.file
+      ? { to: business.owner, subject: "The invoice export couldn't be read", text: `No reminders went out, because ${p.why.join("; ")}.\nExport the open invoices again (or ask for the column names to be updated) and it will be picked up on the next run.` }
+      : { to: business.owner, subject: `Invoice ${p.number || `on line ${p.line}`} needs a look`, text: `It wasn't reminded because: ${p.why.join("; ")}.\nFix it in your invoicing tool and it will be picked up on the next run.` });
   }
   for (const inv of open) {
     const late = daysBetween(inv.due, today.date);
