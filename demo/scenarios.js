@@ -23,7 +23,7 @@ export const scenarios = [
     id: "booking-reminders", title: "Booking reminders", business: groomer,
     async run({ mail, s, sim, emit }) {
       const book = bookingReminders({ store: s, mail, business: groomer, now: () => sim.now });
-      const arrive = async (iso, booking, tag = "booking") => { sim.now = new Date(iso); emit({ at: sim.now, type: "form", tag, label: tag === "booking" ? "Online booking, as the booking tool sent it" : "A booking moved online", form: booking }); await book.booked(booking); };
+      const arrive = async (iso, booking, tag = "booking") => { sim.now = new Date(iso); emit({ at: sim.now, type: "form", tag, label: tag === "booking" ? "A new online booking, from the booking tool" : "A booking moved online", form: booking }); await book.booked(booking); };
       const jordan = { id: "b1", name: "JORDAN PRICE", email: " Jordan@Example.com", phone: "507 555 0177", service: "Full groom", start: "2026-10-28T19:00:00Z" };
       await arrive("2026-10-26T15:12:00Z", jordan);
       await arrive("2026-10-27T02:40:00Z", { id: "b2", name: "ana lima", email: "Ana.Lima@Gmial.com", phone: "(507) 555-0122", service: "Nail trim", start: "2026-10-29T14:00:00Z" });
