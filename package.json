@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "demo": "node demo/run.js"
+    "demo": "node demo/run.js",
+    "bench": "node demo/bench.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT"
 }
