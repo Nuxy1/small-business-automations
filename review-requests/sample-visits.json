@@ -1,0 +1,8 @@
+[
+  { "id": "a-101", "customer": "ANA LIMA", "email": "ana.lima@example.com", "finished": "2026-10-26T16:00:00Z", "status": "completed" },
+  { "id": "a-102", "customer": "Jordan Price", "email": "jordan@example.com", "finished": "2026-10-26T23:30:00Z", "status": "completed" },
+  { "id": "a-103", "customer": "Tom Becker", "email": "tom.b@example.com", "finished": "2026-10-27T15:00:00Z", "status": "No-show" },
+  { "id": "a-104", "customer": "Ana Lima", "email": "Ana.Lima@Example.com", "finished": "2026-10-28T17:00:00Z", "status": "completed" },
+  { "id": "a-105", "customer": "Priya N.", "email": "priya at example", "finished": "2026-10-28T18:00:00Z", "status": "completed" },
+  { "id": "a-106", "customer": "sam o'neil", "email": "sam.oneil@example.com", "finished": "2026-10-28T19:30:00Z", "status": "completed" }
+]
