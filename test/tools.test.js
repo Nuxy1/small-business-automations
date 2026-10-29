@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { cents, readInvoices, remind } from "../invoice-reminders/index.js";
 import { business as cleaning, columns } from "../invoice-reminders/business.js";
@@ -45,6 +47,32 @@ test("leads: instant reply and owner alert; messy fields cleaned; a repeat is on
   assert.equal(transport.sent.filter((m) => /Still happy to help/.test(m.subject)).length, 0);
 });
 
+test("leads, any form tool: other field names, first and last name apart, lists, nested values, an empty body; nothing the customer typed is lost", async () => {
+  const { transport, s, mail } = setup(plumber.owner);
+  const leads = leadFollowUp({ store: s, mail, business: plumber, now: () => new Date("2026-10-28T15:00:00Z") });
+  assert.equal((await leads.receive({ "First Name": "Jordan", "Last Name": "Price", "Email Address": "Jordan Price <jordan@example.com>", "Phone Number": "(507) 555-0101", "Comments": "Leaky faucet", "Preferred day": "Friday" })).status, "new");
+  const owner = transport.sent.find((m) => m.to === plumber.owner);
+  assert.match(owner.text, /^Name: Jordan Price\nEmail: jordan@example\.com\nPhone: \+15075550101\n\nLeaky faucet\n\nPreferred day: Friday$/);
+  assert.ok(transport.sent.some((m) => m.to === "jordan@example.com"));
+  await leads.receive({ name: ["Sam", "Rivers"], email: ["sam@example.com"], details: { what: "water heater" } });
+  assert.match(transport.sent.find((m) => /Sam Rivers/.test(m.subject)).text, /\{"what":"water heater"\}/);
+  assert.equal((await leads.receive(null)).status, "no-contact");
+});
+
+test("reviews and the core: a missing or broken visit list, a finish time with no zone, a damaged state file", async () => {
+  const { transport, s, mail } = setup(salon.owner);
+  const reviews = reviewRequests({ store: s, mail, business: salon });
+  assert.deepEqual(await reviews.run(null, new Date("2026-10-28T15:00:00Z")), { sent: 0, waiting: 0, skipped: [] });
+  // (finished 9:30 a.m. in Minnesota, written without a zone: not before 11:30 there, whatever zone the server is in)
+  const visit = [null, { id: "v1", customer: "Ana", email: "ana@example.com", finished: "2026-10-28T09:30:00" }];
+  assert.equal((await reviews.run(visit, new Date("2026-10-28T16:00:00Z"))).waiting, 1); // (11:00 there)
+  assert.equal((await reviews.run(visit, new Date("2026-10-28T16:31:00Z"))).sent, 1);
+  assert.equal(transport.sent.length, 1);
+  const dir = mkdtempSync(join(tmpdir(), "sba-"));
+  writeFileSync(join(dir, "state.json"), '{"sends": {"k": {"status": "se');
+  assert.throws(() => store(join(dir, "state.json")), /is damaged .* so nothing was sent/);
+});
+
 test("leads: no usable email or phone goes to the owner, not into a void", async () => {
   const { transport, s, mail } = setup(plumber.owner);
   const leads = leadFollowUp({ store: s, mail, business: plumber, now: () => new Date("2026-10-28T15:00:00Z") });
@@ -81,6 +109,24 @@ test("invoices: messy export read, bad rows to the owner, reminders by days late
   const { transport: t2, s: s2, mail: m2 } = setup(cleaning.owner);
   await remind({ invoices, store: s2, mail: m2, business: cleaning, now: new Date("2026-10-31T15:00:00Z") });
   assert.ok(t2.sent.length > 0 && t2.sent.every((m) => m.to === cleaning.owner));
+});
+
+test("invoices: a report's title lines, a header in other capitals, the total line, a repeated number, an old Excel file, a broken file", async () => {
+  const head = "Invoice No.,Customer,Customer Email,Due Date,Total,Amount Paid,Payment Link";
+  const titled = readInvoices(`Cannon River Cleaning\nOpen Invoices\nAs of October 28, 2026\n\n${head}\n1001,Jordan Price,jordan@example.com,10/20/26,$120.00,,\n,TOTAL,,,$120.00,,\n`, columns);
+  assert.deepEqual([titled.invoices.map((i) => i.number), titled.problems], [["1001"], []]);
+  assert.equal(readInvoices(` invoice no. ,CUSTOMER,Customer  email,due date,TOTAL,Amount paid,Payment link\n1001,Jordan Price,jordan@example.com,10/20/26,$120.00,,\n`, columns).invoices.length, 1);
+  const twice = readInvoices(`${head}\r\n1002,"Smith, John",a@example.com,10/20/26,50,,\r\n1003,Ana,b@example.com,10/20/26,50,,\r\n1002,Other,c@example.com,10/20/26,75,,\r\n`, columns);
+  assert.deepEqual(twice.invoices.map((i) => i.number), ["1003"]);
+  assert.deepEqual(twice.problems.map((p) => [p.line, p.number]), [[2, "1002"], [4, "1002"]]);
+  assert.equal(readInvoices(Buffer.from(`${head}\n1012,Jos\xe9 Ruiz,jr@example.com,10/20/2026,50,,\n`, "latin1"), columns).invoices[0].customer, "José Ruiz");
+  const broken = readInvoices(`${head}\n1011,"Never closed,nc@example.com,10/20/2026,50,,\n`, columns);
+  const wrong = readInvoices("Name,Phone\nJordan,555\n", columns);
+  assert.ok(broken.problems[0].file && /unclosed quote.*line 2/.test(broken.problems[0].why[0]));
+  assert.ok(wrong.problems[0].file && /no header row/.test(wrong.problems[0].why[0]));
+  const { transport, s, mail } = setup(cleaning.owner);
+  await remind({ ...broken, store: s, mail, business: cleaning, now: new Date("2026-10-28T15:00:00Z") });
+  assert.deepEqual(transport.sent.map((m) => [m.to, m.subject]), [[cleaning.owner, "The invoice export couldn't be read"]]);
 });
 
 test("reviews: after the visit, outside quiet hours, once per person in 180 days, never after cancel or opt-out, same link for all", async () => {

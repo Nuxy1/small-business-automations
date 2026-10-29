@@ -58,3 +58,25 @@ test("bookings: no usable email or an unreadable time goes to the owner", async 
   assert.equal(await book.booked({ id: "b10", name: "Lee", email: "lee@example.com", start: "next tuesday" }), "unreadable");
   assert.equal(transport.sent.length, 2);
 });
+
+test("bookings, messy webhooks: an empty body, a time with no zone, a past visit, Unix seconds, no service, a display-name email, a late event after a cancel", async () => {
+  const transport = memory();
+  const s = store(null);
+  const clock = new Date("2026-10-28T15:00:00Z"); // (Wed 10 a.m. in Minnesota)
+  const mail = mailer({ transport, store: s, owner: groomer.owner, now: () => clock, wait: async () => {} });
+  const book = bookingReminders({ store: s, mail, business: groomer, now: () => clock });
+  const last = () => transport.sent.at(-1);
+  assert.equal(await book.booked(null), "unreadable");
+  assert.equal(await book.booked({ id: "a", name: "Jordan", email: "jordan@example.com", service: "Bath", start: "2026-11-04T14:00:00" }), "booked");
+  assert.match(last().subject, /November 4 at 2:00 PM/); // (the business's 2 p.m., whatever zone the server runs in)
+  const before = transport.sent.length;
+  assert.equal(await book.booked({ id: "b", name: "Ana", email: "ana@example.com", service: "Bath", start: "2026-10-20T15:00:00Z", status: "completed" }), "past");
+  assert.equal(transport.sent.length, before); // (no "You're booked" for a visit that's over)
+  await book.booked({ id: "c", name: "Sam", email: "sam@example.com", service: "Bath", start: 1793570400 });
+  assert.match(last().subject, /November 1 at 4:00 PM/);
+  await book.booked({ id: "d", name: "Lee", email: "Lee Ng <lee@example.com>", start: "2026-11-04T20:00:00Z" });
+  assert.deepEqual([transport.sent.at(-2).to, transport.sent.at(-2).subject], ["lee@example.com", "Booked: an appointment, Wednesday, November 4 at 2:00 PM"]);
+  await book.booked({ id: "e", name: "Pat", email: "pat@example.com", service: "Bath", start: "2026-11-04T20:00:00Z", status: "cancelled" });
+  assert.equal(await book.booked({ id: "e", name: "Pat", email: "pat@example.com", service: "Bath", start: "2026-11-04T20:00:00Z" }), "cancelled");
+  assert.equal(transport.sent.filter((m) => m.to === "pat@example.com" && /^Booked/.test(m.subject)).length, 0);
+});
