@@ -1,5 +1,7 @@
 // How fast each automation gets through a big, messy batch (5,000 records each), with every message going to memory
 // instead of a mail server: the numbers on the case-study pages.  npm run bench
+import { bookingReminders } from "../booking-reminders/index.js";
+import { business as groomer } from "../booking-reminders/business.js";
 import { mailer, memory } from "../core/mail.js";
 import { store } from "../core/store.js";
 import { readInvoices, remind } from "../invoice-reminders/index.js";
@@ -44,4 +46,15 @@ const time = async (fn) => { const t = performance.now(); await fn(); return (pe
   let out;
   const secs = await time(async () => { out = await reviews.run(visits, new Date("2026-10-28T19:00:00Z")); });
   console.log(`Review requests: ${N} visits in ${secs.toFixed(2)} s; ${out.sent} thank-yous (one per person), ${out.skipped.length} skipped (no-shows, repeats, bad emails)`);
+}
+{
+  const { s, t, mail } = kit();
+  let clock = new Date("2026-10-26T15:00:00Z");
+  const book = bookingReminders({ store: s, mail, business: groomer, now: () => clock });
+  const secs = await time(async () => {
+    for (let i = 0; i < N; i++) await book.booked({ id: `b${i}`, name: names[i % 7], email: messy(i), phone: "507 555 0177", service: "Full groom", start: new Date(Date.parse("2026-10-27T14:00:00Z") + (i % 40) * 3_600_000).toISOString() });
+    clock = new Date("2026-10-27T15:00:00Z");
+    await book.tick();
+  });
+  console.log(`Booking reminders: ${N} bookings (typos, bad emails) confirmed and checked for reminders in ${secs.toFixed(2)} s; ${t.sent.filter((m) => m.to !== groomer.owner).length} customer emails`);
 }

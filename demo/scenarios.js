@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { mailer } from "../core/mail.js";
 import { store } from "../core/store.js";
 import { local } from "../core/time.js";
+import { bookingReminders } from "../booking-reminders/index.js";
+import { business as groomer } from "../booking-reminders/business.js";
 import { readInvoices, remind } from "../invoice-reminders/index.js";
 import { business as cleaning, columns } from "../invoice-reminders/business.js";
 import { leadFollowUp } from "../lead-follow-up/index.js";
@@ -17,6 +19,24 @@ export const stamp = (d) => { const l = local(d, TZ); return `${["Mon", "Tue", "
 const file = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 export const scenarios = [
+  {
+    id: "booking-reminders", title: "Booking reminders", business: groomer,
+    async run({ mail, s, sim, emit }) {
+      const book = bookingReminders({ store: s, mail, business: groomer, now: () => sim.now });
+      const arrive = async (iso, booking, tag = "booking") => { sim.now = new Date(iso); emit({ at: sim.now, type: "form", tag, label: tag === "booking" ? "Online booking, as the booking tool sent it" : "A booking moved online", form: booking }); await book.booked(booking); };
+      const jordan = { id: "b1", name: "JORDAN PRICE", email: " Jordan@Example.com", phone: "507 555 0177", service: "Full groom", start: "2026-10-28T19:00:00Z" };
+      await arrive("2026-10-26T15:12:00Z", jordan);
+      await arrive("2026-10-27T02:40:00Z", { id: "b2", name: "ana lima", email: "Ana.Lima@Gmial.com", phone: "(507) 555-0122", service: "Nail trim", start: "2026-10-29T14:00:00Z" });
+      // (every hour to Thursday evening; Jordan moves on Tuesday afternoon)
+      for (let t = Date.parse("2026-10-26T16:00:00Z"); t <= Date.parse("2026-10-29T21:00:00Z"); t += 3_600_000) {
+        sim.now = new Date(t);
+        if (t === Date.parse("2026-10-27T22:00:00Z")) await arrive("2026-10-27T21:05:00Z", { ...jordan, start: "2026-10-29T16:00:00Z" }, "moved");
+        sim.now = new Date(t);
+        await book.tick();
+        if (t === Date.parse("2026-10-29T12:00:00Z") && book.skippedSoon("b2")) emit({ at: sim.now, type: "note", note: "Ana's 2-hour reminder would land at 7 a.m.: skipped, she had yesterday's" });
+      }
+    },
+  },
   {
     id: "lead-follow-up", title: "Lead follow-up", business: plumber,
     async run({ mail, s, sim, emit }) {
