@@ -4,7 +4,7 @@
 // cancelled one gets none, and every morning the owner gets the day's schedule. Messy names, emails and phones are
 // cleaned; a booking with no usable email goes to the owner to confirm by hand.
 import * as normalize from "../core/normalize.js";
-import { HOUR, local, outsideQuiet } from "../core/time.js";
+import { HOUR, local, outsideQuiet, parseTime } from "../core/time.js";
 
 export const DEFAULTS = { timeZone: "America/Chicago", quiet: [20, 9], dayBefore: 24, hoursBefore: 2, scheduleAt: 7 };
 
@@ -16,20 +16,24 @@ export function bookingReminders({ store, mail, business, now = () => new Date()
 
   return {
     // A booking made, moved or cancelled: { id, name, email, phone, service, start (ISO), status }.
-    async booked(raw) {
+    async booked(event) {
+      const raw = event && typeof event === "object" ? event : {};
       const email = normalize.email(raw.email);
       const name = normalize.name(raw.name).value;
-      const start = new Date(raw.start);
+      const start = parseTime(raw.start, cfg.timeZone);
       if (!raw.id || Number.isNaN(start.getTime())) {
-        await mail.tell(`A booking couldn't be read`, `It had no id or an unreadable time, so nothing was sent:\n${JSON.stringify(raw)}`);
+        await mail.tell(`A booking couldn't be read`, `It had no id or an unreadable time, so nothing was sent:\n${JSON.stringify(event)}`);
         return "unreadable";
       }
       const before = bookings[raw.id];
-      const b = { id: raw.id, name, email: email.ok ? email.value : "", phone: normalize.phone(raw.phone).value, service: String(raw.service ?? "").trim(), start: start.toISOString(), status: /cancel/i.test(raw.status ?? "") ? "cancelled" : "booked" };
+      const b = { id: raw.id, name, email: email.ok ? email.value : "", phone: normalize.phone(raw.phone).value, service: String(raw.service ?? "").trim() || "an appointment", start: start.toISOString(), status: /cancel/i.test(raw.status ?? "") ? "cancelled" : "booked" };
+      // (a late, retried "booked" for a booking already cancelled at the same time doesn't bring it back)
+      if (before?.status === "cancelled" && b.status === "booked" && before.start === b.start) return "cancelled";
       bookings[raw.id] = b;
       store.save();
+      if (start <= now()) return "past"; // (an update about a visit that's started or over: kept, nothing sent)
       if (b.status === "cancelled") {
-        if (b.email) await mail.once(`booking:${b.id}:cancelled`, { to: b.email, subject: `Cancelled: ${b.service} at ${business.name}`, text: `${hi(b)}\n\nYour ${b.service} on ${when(b.start)} is cancelled, and you won't get any reminders for it. Whenever you'd like a new time: ${business.book}\n\n${business.signature}` });
+        if (b.email) await mail.once(`booking:${b.id}:cancelled`, { to: b.email, subject: `Cancelled: ${b.service} at ${business.name}`, text: `${hi(b)}\n\nYour ${b.service.replace(/^an /, "")} on ${when(b.start)} is cancelled, and you won't get any reminders for it. Whenever you'd like a new time: ${business.book}\n\n${business.signature}` });
         await mail.once(`booking:${b.id}:owner-cancelled`, { to: business.owner, subject: `Cancelled: ${b.name}, ${when(b.start)}`, text: `${b.name} cancelled ${b.service} on ${when(b.start)}. The time is free again.` });
         return "cancelled";
       }
@@ -42,7 +46,7 @@ export function bookingReminders({ store, mail, business, now = () => new Date()
       await mail.once(`booking:${b.id}:confirm:${b.start}`, {
         to: b.email,
         subject: `${moved ? "Moved" : "Booked"}: ${b.service}, ${when(b.start)}`,
-        text: `${hi(b)}\n\n${moved ? `Your ${b.service} is moved to` : `You're booked for ${b.service} on`} ${when(b.start)} at ${business.name}, ${business.address}.\n\nNeed to change it? ${business.book}\n\n${business.signature}`,
+        text: `${hi(b)}\n\n${moved ? `Your ${b.service.replace(/^an /, "")} is moved to` : `You're booked for ${b.service} on`} ${when(b.start)} at ${business.name}, ${business.address}.\n\nNeed to change it? ${business.book}\n\n${business.signature}`,
       });
       if (!before || moved) await mail.once(`booking:${b.id}:owner:${b.start}`, { to: business.owner, subject: `${moved ? "Moved" : "New booking"}: ${b.name}, ${when(b.start)}`, text: `${b.service} for ${b.name} (${b.email}${b.phone ? `, ${b.phone}` : ""}).${moved ? ` It was ${when(before.start)}.` : ""}` });
       return moved ? "moved" : "booked";
