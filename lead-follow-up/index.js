@@ -12,23 +12,37 @@ export const DEFAULTS = {
   sameLeadHours: 24, // (the same email or phone again within this: one lead)
 };
 
+// A field's value as text: lists joined with spaces (["Sam", "Rivers"]), anything nested written out, not "[object Object]".
+const flat = (v) => (Array.isArray(v) ? v.map(flat).join(" ") : v && typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
+
 export function leadFollowUp({ store, mail, business, now = () => new Date(), ...options }) {
   const cfg = { ...DEFAULTS, ...options };
   const leads = (store.state.leads ??= []);
   const hello = (name) => `Hi ${name.split(" ")[0] || "there"},`;
 
   return {
-    // A form submission (any shape a form tool sends: name/email/phone/message under common field names).
+    // A form submission, whatever the form tool calls its fields ("Email Address", "Your email", "Phone Number",
+    // "First name" and "Last name", "Comments"...). Fields it doesn't recognise still reach the owner.
     async receive(form) {
-      const raw = { name: form.name ?? form["full name"] ?? form.Name ?? "", email: form.email ?? form.Email ?? form["e-mail"] ?? "", phone: form.phone ?? form.Phone ?? form.tel ?? "", message: form.message ?? form.Message ?? form.details ?? "" };
+      const fields = Object.entries(form && typeof form === "object" ? form : {}).map(([k, v]) => [k, flat(v).trim()]).filter(([, v]) => v);
+      const used = new Set();
+      const pick = (want, not = /$^/) => {
+        const hit = fields.find(([k]) => want.test(k) && !not.test(k) && !used.has(k));
+        if (hit) used.add(hit[0]);
+        return hit?.[1] ?? "";
+      };
+      const raw = { email: pick(/e-?mail/i), phone: pick(/phone|mobile|cell|\btel\b/i) };
+      raw.name = pick(/^(full |your )?name$/i) || [pick(/first/i), pick(/last|surname/i)].filter(Boolean).join(" ") || pick(/name/i, /company|business|user/i);
+      raw.message = pick(/message|details|comment|question|describe|help|need|inquiry|project/i);
+      const other = fields.filter(([k]) => !used.has(k));
       const name = normalize.name(raw.name).value;
       const email = normalize.email(raw.email);
       const phone = normalize.phone(raw.phone);
-      const message = String(raw.message).trim().slice(0, 4000);
+      const message = raw.message.slice(0, 4000);
       const problems = [!email.ok && `email "${raw.email}" doesn't look right`, !phone.ok && `phone "${raw.phone}" doesn't look right`].filter(Boolean);
       const contact = { email: email.ok ? email.value : "", phone: phone.ok ? phone.value : "" };
       const time = now();
-      const details = `Name: ${name || "(none given)"}\nEmail: ${contact.email || raw.email || "(none)"}\nPhone: ${contact.phone || raw.phone || "(none)"}\n\n${message || "(no message)"}${problems.length ? `\n\nCheck: ${problems.join("; ")}.` : ""}`;
+      const details = `Name: ${name || "(none given)"}\nEmail: ${contact.email || raw.email || "(none)"}\nPhone: ${contact.phone || raw.phone || "(none)"}\n\n${message || "(no message)"}${other.length ? `\n\n${other.map(([k, v]) => `${k}: ${v.slice(0, 1000)}`).join("\n")}` : ""}${problems.length ? `\n\nCheck: ${problems.join("; ")}.` : ""}`;
 
       if (!contact.email && !contact.phone) {
         await mail.tell(`New inquiry with no way to reply automatically${name ? `: ${name}` : ""}`, `Nobody was emailed back: there's no usable email or phone.\n\n${details}`);
@@ -74,7 +88,8 @@ export function leadFollowUp({ store, mail, business, now = () => new Date(), ..
     },
 
     // The customer replied, booked or called: no more follow-ups for them.
-    stop(emailOrPhone, reason = "replied") {
+    stop(given, reason = "replied") {
+      const emailOrPhone = String(given ?? "");
       const key = normalize.email(emailOrPhone).ok && emailOrPhone.includes("@") ? normalize.email(emailOrPhone).value : normalize.phone(emailOrPhone).value;
       let n = 0;
       for (const lead of leads) if (!lead.stopped && (lead.email === key || lead.phone === key)) (lead.stopped = reason), n++;
