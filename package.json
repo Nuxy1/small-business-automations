@@ -1,0 +1,12 @@
+{
+  "name": "small-business-automations",
+  "version": "1.0.0",
+  "description": "Three working automations for made-up local businesses: lead follow-up, invoice reminders and review requests. Never sends twice, never fails silently, cleans messy data. Zero dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "demo": "node demo/run.js"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}
