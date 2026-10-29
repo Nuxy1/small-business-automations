@@ -1,0 +1,9 @@
+Invoice No.,Customer,Customer Email,Due Date,Total,Amount Paid,Payment Link
+1041,MARIA GONZALEZ,maria.g@example.com,10/02/2026,"$1,240.00",$0.00,https://pay.example/1041
+1042,"Chen, Wei",wei.chen@example.com,2026-10-20,$180.00,$80.00,https://pay.example/1042
+1043,Sam Rivers Jr.,SAM.RIVERS@EXAMPLE.COM ,Oct 25 2026,$95.50,,https://pay.example/1043
+1044,o'brien family,obrien@example.com,11/15/2026,$300.00,,https://pay.example/1044
+1045,Lakeside Dental,billing@lakeside-dental.example,10/22/2026,$450.00,$450.00,
+1046,No Email Co,,10/10/2026,$220.00,,
+1047,Riverside Cafe,cafe@riverside.example,13/45/2026,$60.00,,
+1048,Hilltop Rentals,hilltop@example.com,09/20/2026,$975.00,,https://pay.example/1048
