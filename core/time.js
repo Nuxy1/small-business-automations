@@ -21,6 +21,17 @@ export function at(date, timeZone, hour = 0, minute = 0) {
   return new Date(guess);
 }
 
+// A time as a booking tool or export sends it: ISO with an offset or Z; ISO without one, which means the business's own
+// zone (read as the server's, a 2 p.m. booking would be confirmed for 8 a.m.); or Unix seconds or milliseconds. An
+// invalid Date when it can't be read.
+export function parseTime(raw, timeZone) {
+  const text = String(raw ?? "").trim();
+  if (/^\d{9,13}$/.test(text)) return new Date(text.length <= 10 ? Number(text) * 1000 : Number(text));
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/.exec(text);
+  if (m) return new Date(at(m[1], timeZone, Number(m[2]), Number(m[3])).getTime() + Number(m[4] ?? 0) * 1000);
+  return new Date(text || NaN);
+}
+
 // Whole local days from date a to date b ("YYYY-MM-DD"), whatever the clocks did in between.
 export const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY);
 

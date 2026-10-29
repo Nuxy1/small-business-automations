@@ -7,12 +7,14 @@ const PARTICLES = new Set(["van", "von", "der", "den", "de", "del", "della", "da
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
 
 export function email(raw) {
-  const text = String(raw ?? "").trim();
+  const given = String(raw ?? "").trim();
+  // ("Kim Ng <kim@example.com>", as many tools send it: the address inside)
+  const text = /<([^<>\s]+@[^<>\s]+)>/.exec(given)?.[1] ?? given;
   if (!text) return { value: "", ok: true, note: "" };
   // (common typos of the big providers, fixed only when unambiguous)
   const value = text.toLowerCase().replace(/^mailto:/, "").replace(/@gmial\.com$|@gamil\.com$|@gmail\.co$/, "@gmail.com").replace(/@hotmial\.com$/, "@hotmail.com");
-  if (!EMAIL.test(value)) return { value: text, ok: false, note: "invalid email" };
-  return { value, ok: true, note: value === text ? "" : "email tidied" };
+  if (!EMAIL.test(value)) return { value: given, ok: false, note: "invalid email" };
+  return { value, ok: true, note: value === given ? "" : "email tidied" };
 }
 
 export function phone(raw, countryCode = "1") {
